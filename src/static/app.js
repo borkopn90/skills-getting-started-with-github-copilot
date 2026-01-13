@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Clear loading message
       activitiesList.innerHTML = "";
 
+
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
@@ -26,8 +27,13 @@ document.addEventListener("DOMContentLoaded", () => {
           participantsHTML = `
             <div class="participants-section">
               <strong>Participants:</strong>
-              <ul class="participants-list">
-                ${details.participants.map(p => `<li>${p}</li>`).join("")}
+              <ul class="participants-list no-bullets">
+                ${details.participants.map(p => `
+                  <li>
+                    <span class="participant-email">${p}</span>
+                    <span class="delete-participant" title="Remove participant" data-activity="${encodeURIComponent(name)}" data-email="${encodeURIComponent(p)}">&#128465;</span>
+                  </li>
+                `).join("")}
               </ul>
             </div>
           `;
@@ -57,23 +63,23 @@ document.addEventListener("DOMContentLoaded", () => {
         activitySelect.appendChild(option);
       });
 
-      // Add some basic styles for participants section
+      // Add some basic styles for participants section (delete icon, no bullets)
       const style = document.createElement("style");
       style.textContent = `
-        .participants-section {
-          margin-top: 10px;
-          padding: 8px;
-          background: #f7f7fa;
-          border-radius: 6px;
+        .participants-list.no-bullets {
+          list-style: none;
+          margin-left: 0;
         }
-        .participants-list {
-          margin: 6px 0 0 18px;
-          padding: 0;
-          color: #333;
+        .delete-participant {
+          color: #c62828;
+          cursor: pointer;
+          margin-left: 10px;
+          font-size: 1.1em;
+          vertical-align: middle;
+          transition: color 0.2s;
         }
-        .no-participants {
-          color: #888;
-          font-style: italic;
+        .delete-participant:hover {
+          color: #ff5252;
         }
       `;
       document.head.appendChild(style);
@@ -82,6 +88,41 @@ document.addEventListener("DOMContentLoaded", () => {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
       console.error("Error fetching activities:", error);
     }
+
+    // Add event listeners for delete icons
+    document.querySelectorAll('.delete-participant').forEach(icon => {
+      icon.addEventListener('click', async (e) => {
+        const activity = decodeURIComponent(icon.getAttribute('data-activity'));
+        const email = decodeURIComponent(icon.getAttribute('data-email'));
+        if (!confirm(`Remove ${email} from ${activity}?`)) return;
+        try {
+          const response = await fetch(`/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`, {
+            method: 'POST',
+          });
+          const result = await response.json();
+          if (response.ok) {
+            messageDiv.textContent = result.message || 'Participant removed.';
+            messageDiv.className = 'success';
+            messageDiv.classList.remove('hidden');
+            fetchActivities();
+          } else {
+            messageDiv.textContent = result.detail || 'Failed to remove participant.';
+            messageDiv.className = 'error';
+            messageDiv.classList.remove('hidden');
+          }
+          setTimeout(() => {
+            messageDiv.classList.add('hidden');
+          }, 5000);
+        } catch (error) {
+          messageDiv.textContent = 'Failed to remove participant. Please try again.';
+          messageDiv.className = 'error';
+          messageDiv.classList.remove('hidden');
+          setTimeout(() => {
+            messageDiv.classList.add('hidden');
+          }, 5000);
+        }
+      });
+    });
   }
 
   // Handle form submission
@@ -105,6 +146,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities list so UI updates immediately
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
